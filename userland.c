@@ -5,6 +5,7 @@
 
 #define SYS_HELLOWORLD 440
 #define COMMANDS_COUNT 2
+#define BUF_SIZE 256
 
 const char* commands[COMMANDS_COUNT] = { "bpf", "page" };
 const char* structure_names[COMMANDS_COUNT] = { "bpf_map_memory", "page" };
@@ -48,20 +49,12 @@ int main() {
     print_help();
 
     int option = get_option();
-    syscall_status = syscall(SYS_HELLOWORLD, option);
+    char* buffer = malloc(sizeof (char) * BUF_SIZE);
+    syscall_status = syscall(SYS_HELLOWORLD, option, buffer, BUF_SIZE);
     if (syscall_status < 0) {
         printf("Problem while executing syscall\n");
     }
-
-    proc = fopen("/proc/os_lab2", "r");
-    if (!proc) {
-        printf("Sorry, proc file wasn't found\n");
-        return 0;
-    }
-    while (getline(&line, &len, proc) != -1) {
-        printf("%s", line);
-    }
+    fwrite(buffer, 1, BUF_SIZE, stdout);
     free(line);
-    fclose(proc);
     return 0;
 }

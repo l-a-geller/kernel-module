@@ -24,7 +24,7 @@ MODULE_VERSION("1.0");
 			"CONFIG_PGTABLE_LEVELS: %d, \n" \
 			"PAGE_SIZE: %ld, \n" \
 			"flags: %u l, \n" \
-			"refcount: %u \n" 
+			"refcount: %u \n"
 
 
 static struct proc_dir_entry *out;
@@ -35,24 +35,25 @@ static struct mutex lock;
 
 static int get_bpf_map_memory(struct bpf_map_memory* mem) {
 
-	struct bpf_insn prog[] = {
-		BPF_ALU64_IMM(BPF_MOV, BPF_REG_0, 0),
-		BPF_EXIT_INSN(),
-	};
+    struct bpf_insn prog[] = {
+            BPF_ALU64_IMM(BPF_MOV, BPF_REG_0, 0),
+            BPF_EXIT_INSN(),
+    };
 
-	union bpf_attr attr = {0};
-	attr.prog_type = BPF_PROG_TYPE_SCHED_CLS;
-	attr.insn_cnt = 2;
-	attr.insns = (__u64)(unsigned long)(prog);
-	attr.license = (__u64)(unsigned long)("");
-	attr.key_size = 4;
-	attr.value_size = 4;
-	attr.max_entries = 1;
-	attr.map_flags = 0;
+    union bpf_attr attr = {0};
+    attr.prog_type = BPF_PROG_TYPE_SCHED_CLS;
+    attr.insn_cnt = 2;
+    attr.insns = (__u64)(unsigned long)(prog);
+    attr.license = (__u64)(unsigned long)("");
+    attr.key_size = 4;
+    attr.value_size = 4;
+    attr.max_entries = 1;
+    attr.map_flags = 0;
 
-	struct bpf_map mp;
-	bpf_map_init_from_attr(&mp, &attr);
-	*mem = mp.memory;
+    struct bpf_map mp;
+    bpf_map_init_from_attr(&mp, &attr);
+    *mem = mp.memory;
+
 }
 
 static unsigned long get_page_phys_addr(unsigned long vaddr, struct page* my_beloved_page) {
@@ -118,73 +119,61 @@ static unsigned long get_page_phys_addr(unsigned long vaddr, struct page* my_bel
 }
 
 static void get_page_info(void) {
-	unsigned long vaddr = __get_free_page(GFP_KERNEL);
-	// Allocate a single page and return a virtual address
-        if (vaddr == 0) {
-        	pr_notice("__get_free_page failed\n");	
-		    sprintf(proc_read_buffer, "__get_free_page failed\n");
-        } else {
-            struct page my_beloved_page = {0};
-            sprintf(proc_read_buffer,
-                    PAGE_EXTENDED_MESSAGE,
-                    vaddr,
-                    get_page_phys_addr(vaddr, &my_beloved_page),
-                    CONFIG_PGTABLE_LEVELS,
-                    PAGE_SIZE,
-                    my_beloved_page.flags,
-                    my_beloved_page._refcount.counter
-            );
-            free_page(vaddr);
-	}
+    unsigned long vaddr = __get_free_page(GFP_KERNEL);
+    // Allocate a single page and return a virtual address
+    if (vaddr == 0) {
+        pr_notice("__get_free_page failed\n");
+        sprintf(proc_read_buffer, "__get_free_page failed\n");
+    } else {
+        struct page my_beloved_page = {0};
+        sprintf(proc_read_buffer,
+                PAGE_EXTENDED_MESSAGE,
+                vaddr,
+                get_page_phys_addr(vaddr, &my_beloved_page),
+                CONFIG_PGTABLE_LEVELS,
+                PAGE_SIZE,
+                my_beloved_page.flags,
+                my_beloved_page._refcount.counter
+        );
+        free_page(vaddr);
+    }
 }
 
-static ssize_t struct2proc(struct file* filp, char __user* buffer, size_t length, loff_t *offset) {
+static void struct2proc(char* buffer, size_t length) {
     mutex_lock(&lock);
-    if (*offset > 0) {
-        return 0;
-    }
     if (length < BUF_SIZE) {
         pr_notice("Not enough buffer size\n");
-        return 0;
     }
     if (bpf_selected) {
-	    struct bpf_map_memory bpf = {0};
+        struct bpf_map_memory bpf = {0};
         pr_info("BPF_map_memory requested\n");
-	    sprintf(proc_read_buffer, BPF_MESSAGE, bpf.pages);
-	    strcat(proc_read_buffer, "\n");
+        sprintf(proc_read_buffer, BPF_MESSAGE, bpf.pages);
+        strcat(proc_read_buffer, "\n");
     }
     if (page_selected) {
         pr_info("Page requested\n");
-	    get_page_info();
+        get_page_info();
     }
     bpf_selected = false;
     page_selected = false;
     length = strlen(proc_read_buffer) + 1;
-    *offset += length;
     if (copy_to_user(buffer, proc_read_buffer, length)) {
         pr_info("Copy_to_user on buffer message failed\n");
-        return -EFAULT;
     }
     mutex_unlock(&lock);
-    return *offset;
 }
 
-static const struct proc_ops proc_file_fops = {
-    .proc_read = struct2proc
-};
-
-
-SYSCALL_DEFINE1( helloworld, int, struct_to_print_type ) {
+SYSCALL_DEFINE3( helloworld, int, struct_to_print_type, char*, buffer, size_t, size ) {
     pr_info("I am... Ghoul.\n");
-    if (NULL == out) out = proc_create(PROC_FILE_NAME, 0, NULL, &proc_file_fops);
+    struct2proc(buffer, size);
     if (struct_to_print_type == 0) {
         pr_info("BPF map memory structure selected");
-	    bpf_selected = true;
+        bpf_selected = true;
     } else if (struct_to_print_type == 1) {
-	    pr_info("Page structure selected");
-	    page_selected = true;
+        pr_info("Page structure selected");
+        page_selected = true;
     } else {
-	    pr_notice("Invalid option selected");
+        pr_notice("Invalid option selected");
     }
     return 0;
 }
